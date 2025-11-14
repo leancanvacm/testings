@@ -1,0 +1,356 @@
+<!DOCTYPE html>
+<html lang="th">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>ข้อสอบก่อนเรียน|อบรมCanva</title>
+    <link href="https://cdn.jsdelivr.net/npm/tailwindcss@2.2.19/dist/tailwind.min.css" rel="stylesheet">
+    <script src="https://cdn.jsdelivr.net/npm/sweetalert2@11"></script>
+    <link href="https://fonts.googleapis.com/css2?family=Prompt:wght@300;400;700&display=swap" rel="stylesheet">
+    <script src="https://cdn.jsdelivr.net/npm/canvas-confetti@1.4.0/dist/confetti.browser.min.js"></script>
+    <script src="https://code.jquery.com/jquery-3.6.0.min.js"></script>
+
+    <style>
+        body {
+            font-family: 'Prompt', sans-serif;
+        }
+    </style>
+</head>
+<body class="bg-gray-100 min-h-screen flex items-center justify-center">
+<div class="w-full max-w-2xl bg-white p-8 rounded-lg shadow-md">
+    <h1 class="text-2xl font-bold text-center text-gray-700 mb-6">ยินดีต้อนรับสู่ข้อสอบก่อนเรียน</h1>
+
+    <!-- User Profile Section -->
+    <div id="profile" class="text-center mb-6 hidden">
+        <img id="userPicture" src="https://i.pinimg.com/originals/be/04/0f/be040f35f073adc3a48c1fba489d2bc4.gif" onclick="clearAllData()" class="rounded-full mx-auto w-24 h-24 mb-2" alt="Profile Picture">
+        <h2 id="userName" class="text-xl font-bold text-gray-800"></h2>
+    </div>
+
+    <!-- Quiz Section -->
+    <div id="quiz" class="space-y-8"></div>
+
+    <!-- Navigation Buttons -->
+    <div class="flex justify-between mt-6 space-x-4">
+        <button id="backButton" onclick="previousQuestion()"
+                class="w-full bg-yellow-500 hover:bg-yellow-600 text-white font-bold py-2 px-4 rounded-lg focus:outline-none focus:ring-2 focus:ring-yellow-400 focus:ring-opacity-50 hidden">
+            ย้อนกลับ
+        </button>
+        <button id="nextButton" onclick="nextQuestion()"
+                class="w-full bg-blue-500 hover:bg-blue-600 text-white font-bold py-2 px-4 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-400 focus:ring-opacity-50 hidden">
+            ถัดไป
+        </button>
+        <button id="submitButton" onclick="checkAnswers()"
+                class="w-full bg-green-500 hover:bg-green-600 text-white font-bold py-2 px-4 rounded-lg focus:outline-none focus:ring-2 focus:ring-green-400 focus:ring-opacity-50 hidden">
+            ส่งคำตอบ
+        </button>
+    </div>
+
+    <script src="https://static.line-scdn.net/liff/edge/2.1/sdk.js"></script>
+    <script>
+        const LIFF_ID = "2007342211-vMpa6qg2"; // Replace with your actual LIFF ID
+
+        // ตั้งค่าวันที่เริ่มต้นและวันที่สิ้นสุด
+        const startDate = new Date("2025-05-13T08:00:00"); // วันที่เริ่มต้น และเวลา
+        const endDate = new Date("2025-05-13T12:30:00"); // วันที่สิ้นสุด และเวลา
+
+        let userProfile = null;
+        let questions = [];
+        let currentQuestionIndex = 0;
+        let score = 0;
+        let userAnswers = [];
+
+        async function initLiff() {
+            await liff.init({ liffId: LIFF_ID });
+            if (liff.isLoggedIn()) {
+                userProfile = await liff.getProfile();
+                displayProfile(userProfile);
+                checkIfAlreadyTaken(userProfile.userId);  // ตรวจสอบว่าผู้ใช้เคยทำข้อสอบมาแล้วหรือยัง
+            } else {
+                liff.login();
+            }
+        }
+
+        function displayProfile(profile) {
+            document.getElementById("userPicture").src = profile.pictureUrl;
+            document.getElementById("userName").innerText = profile.displayName;
+            document.getElementById("profile").classList.remove("hidden");
+        }
+
+        async function fetchQuestions() {
+            try {
+                const response = await fetch("https://script.google.com/macros/s/AKfycbyAIsKpH9EEzE_oep1fQzrc7XVfJFIPj-zH2_s4Vi-hgi2_5d9bcre3ynDIMgjg8LEO/exec");
+                if (!response.ok) {
+                    throw new Error("Network response was not ok");
+                }
+                const data = await response.json();
+                questions = data; // Store the fetched questions
+
+                if (questions.length > 10) {
+                    questions = getRandomQuestions(questions, 10);
+                }
+                shuffleQuestions(questions);
+                displayCurrentQuestion();
+            } catch (error) {
+                console.error("Error fetching questions:", error);
+                Swal.fire({
+                    title: 'เกิดข้อผิดพลาด',
+                    text: 'ไม่สามารถดึงคำถามได้ กรุณาลองใหม่ในภายหลัง',
+                    icon: 'error',
+                    confirmButtonText: 'ตกลง'
+                });
+            }
+        }
+
+        function getRandomQuestions(questions, num) {
+            const shuffled = [...questions];
+            for (let i = shuffled.length - 1; i > 0; i--) {
+                const j = Math.floor(Math.random() * (i + 1));
+                [shuffled[i], shuffled[j]] = [shuffled[j], shuffled[i]];
+            }
+            return shuffled.slice(0, num);
+        }
+
+        function shuffleQuestions(questions) {
+            for (let i = questions.length - 1; i > 0; i--) {
+                const j = Math.floor(Math.random() * (i + 1));
+                [questions[i], questions[j]] = [questions[j], questions[i]];
+            }
+            questions.forEach(q => shuffleAnswers(q.options));
+        }
+
+        function shuffleAnswers(answers) {
+            for (let i = answers.length - 1; i > 0; i--) {
+                const j = Math.floor(Math.random() * (i + 1));
+                [answers[i], answers[j]] = [answers[j], answers[i]];
+            }
+        }
+
+        function displayCurrentQuestion() {
+            const quizContainer = document.getElementById("quiz");
+            quizContainer.innerHTML = "";
+
+            const questionObj = questions[currentQuestionIndex];
+            const questionDiv = document.createElement("div");
+            questionDiv.classList.add("question", "p-4", "bg-gray-50", "rounded-lg", "shadow-sm");
+
+            questionDiv.innerHTML = `<h3 class="font-medium text-gray-800">${currentQuestionIndex + 1}. ${questionObj.question}</h3>`;
+            questionObj.options.forEach(option => {
+                questionDiv.innerHTML += `
+                    <label class="block mt-2">
+                        <input type="radio" name="q${currentQuestionIndex}" value="${option}" class="mr-2"
+                            ${userAnswers[currentQuestionIndex] === option ? 'checked' : ''}> ${option}
+                    </label>
+                `;
+            });
+            quizContainer.appendChild(questionDiv);
+            document.getElementById("backButton").classList.toggle("hidden", currentQuestionIndex === 0);
+            document.getElementById("nextButton").classList.toggle("hidden", currentQuestionIndex >= questions.length - 1);
+            document.getElementById("submitButton").classList.toggle("hidden", currentQuestionIndex < questions.length - 1);
+        }
+
+        function nextQuestion() {
+            const userAnswer = document.querySelector(`input[name="q${currentQuestionIndex}"]:checked`);
+            if (userAnswer) {
+                userAnswers[currentQuestionIndex] = userAnswer.value;
+                currentQuestionIndex++;
+                displayCurrentQuestion();
+            } else {
+                Swal.fire({
+                    title: 'กรุณาเลือกคำตอบ',
+                    text: 'คุณต้องเลือกคำตอบก่อนที่จะไปยังคำถามถัดไป',
+                    icon: 'warning',
+                    confirmButtonText: 'ตกลง'
+                });
+            }
+        }
+
+        function previousQuestion() {
+            const userAnswer = document.querySelector(`input[name="q${currentQuestionIndex}"]:checked`);
+            if (userAnswer) {
+                userAnswers[currentQuestionIndex] = userAnswer.value;
+            }
+            currentQuestionIndex--;
+            displayCurrentQuestion();
+        }
+
+        function checkAnswers() {
+            const userAnswer = document.querySelector(`input[name="q${currentQuestionIndex}"]:checked`);
+            if (userAnswer) {
+                userAnswers[currentQuestionIndex] = userAnswer.value;
+            }
+
+            // ตรวจสอบว่ามีคำถามข้อใดที่ยังไม่ได้ตอบหรือไม่
+            if (userAnswers.length < questions.length || userAnswers.includes(undefined)) {
+                Swal.fire({
+                    title: 'คุณยังตอบคำถามไม่ครบ',
+                    text: 'กรุณาตอบคำถามทุกข้อก่อนส่งคำตอบ',
+                    icon: 'warning',
+                    confirmButtonText: 'ตกลง'
+                });
+                return;
+            }
+
+            score = 0;
+            questions.forEach((q, index) => {
+                if (userAnswers[index] && q.answer.includes(userAnswers[index])) {
+                    score++;
+                }
+            });
+
+            const resultMessage = `คุณทำคะแนนได้ ${score} จาก ${questions.length} คะแนน`;
+            localStorage.setItem(userProfile.userId, JSON.stringify({ name: userProfile.displayName, score: score }));
+
+            if (score >= 8) {
+                confetti({
+                    particleCount: 100,
+                    spread: 70,
+                    origin: { x: 0.5, y: 0.5 },
+                    colors: ['#ff0000', '#00ff00', '#0000ff']
+                });
+            }
+
+            Swal.fire({
+                title: 'ผลการสอบ',
+                text: resultMessage,
+                icon: 'info',
+                confirmButtonText: 'ตกลง'
+            }).then(() => {
+                sendResultMessage(userProfile.displayName, score, questions.length, userProfile.pictureUrl);
+            });
+        }
+
+        function sendResultMessage(name, score, total, pictureUrl) {
+            const passFailMessage = score >= 8 ? "ผ่าน" : "ไม่ผ่าน";
+
+            const flexMessage = {
+                type: "flex",
+                altText: "ผลการสอบก่อนเรียน",
+                contents: {
+                    type: "bubble",
+                    hero: {
+                        type: "image",
+                        url: pictureUrl,
+                        size: "full",
+                        aspectRatio: "1:1",
+                        aspectMode: "cover"
+                    },
+                    body: {
+                        type: "box",
+                        layout: "vertical",
+                        contents: [
+                            {
+                                type: "text",
+                                text: `${name}`,
+                                weight: "bold",
+                                size: "lg"
+                            },
+                            {
+                                type: "text",
+                                text: `คุณได้คะแนน ${score} จาก ${total} คะแนน`,
+                                size: "md",
+                                weight: "bold",
+                                color: score >= 8 ? "#4CAF50" : "#F44336" // สีเขียวหากผ่าน, สีแดงหากไม่ผ่าน
+                            },
+                            {
+                                type: "text",
+                                text: `คุณ${passFailMessage}การสอบ`,
+                                size: "md",
+                                weight: "bold",
+                                color: score >= 8 ? "#4CAF50" : "#F44336" // สีเขียวหากผ่าน, สีแดงหากไม่ผ่าน
+                            }
+                        ]
+                    }
+                }
+            };
+            liff.sendMessages([flexMessage]).then(() => {
+                liff.closeWindow();
+            });
+        }
+
+        function checkIfAlreadyTaken(userId) {
+            const result = JSON.parse(localStorage.getItem(userId));
+            if (result) {
+                // Hide the quiz
+                $("#quiz").addClass("hidden");
+
+                // Hide buttons
+                $(".flex.justify-between.mt-6.space-x-4").addClass("hidden");
+
+                // Show alert with SweetAlert
+                Swal.fire({
+                    title: 'คุณเคยทำข้อสอบนี้แล้ว',
+                    text: `คะแนนของคุณคือ ${result.score}`,
+                    icon: 'info',
+                    confirmButtonText: 'ตกลง'
+                }).then(() => {
+                    // Close LIFF window if needed
+                    // liff.closeWindow();
+                });
+            }
+        }
+
+        function checkIfDesktop() {
+            const isMobile = /Android|iPhone|iPad|iPod/i.test(navigator.userAgent);
+            if (!isMobile) {
+                Swal.fire({
+                    title: 'การแจ้งเตือน',
+                    text: 'โปรดเปิดแอปนี้บนอุปกรณ์เคลื่อนที่',
+                    icon: 'warning',
+                    confirmButtonText: 'ปิดหน้าต่าง'
+                }).then(() => {
+                    liff.closeWindow();
+                });
+            }
+        }
+
+        function checkIfWithinDateRange() {
+            const currentDate = new Date();
+            const options = { day: 'numeric', month: 'long', year: 'numeric', hour: '2-digit', minute: '2-digit', hour12: true };
+            const formattedStartDate = startDate.toLocaleDateString('th-TH', options);
+            const formattedEndDate = endDate.toLocaleDateString('th-TH', options);
+
+            if (currentDate < startDate) {
+                Swal.fire({
+                    title: 'หน้านี้ยังไม่เปิดให้ใช้งาน',
+                    text: `กรุณากลับมาในวันที่ ${formattedStartDate}`,
+                    icon: 'info',
+                    confirmButtonText: 'ตกลง'
+                }).then(() => {
+                    window.close();
+                });
+                return false;
+            } else if (currentDate > endDate) {
+                Swal.fire({
+                    title: 'หน้านี้หมดเวลาใช้งานแล้ว',
+                    text: `การใช้งานสิ้นสุดเมื่อวันที่ ${formattedEndDate}`,
+                    icon: 'info',
+                    confirmButtonText: 'ตกลง'
+                }).then(() => {
+                    window.close();
+                });
+                return false;
+            }
+            clearAllData(); // เคลียร์ localStorage เมื่อครบกำหนด
+            return true;
+        }
+
+        window.onload = async () => {
+            if (!checkIfWithinDateRange()) {
+                return; // ยุติการทำงานของฟังก์ชันถ้าไม่อยู่ในช่วงเวลาที่กำหนด
+            }
+            if (checkIfDesktop()) {
+                //alert("This quiz can only be accessed on mobile.");
+                window.close(); // ปิดหน้าต่างถ้าเปิดบนคอมพิวเตอร์
+                return; // ยุติการทำงานของฟังก์ชัน
+            }
+            await initLiff();
+            await fetchQuestions();
+        };
+
+        function clearAllData() {
+            // Clear localStorage
+            localStorage.clear();
+        }
+    </script>
+</body>
+</html>
